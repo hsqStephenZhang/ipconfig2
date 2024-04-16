@@ -1,6 +1,7 @@
 pub mod adapter;
-mod error;
+pub mod error;
 
+#[cfg(feature = "computer")]
 pub mod computer;
 
 pub use adapter::{get_adapters, Adapter, OperStatus, IfType};

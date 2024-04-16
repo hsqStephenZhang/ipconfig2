@@ -13,6 +13,7 @@ use windows_sys::Win32::Foundation::ERROR_SUCCESS;
 
 use windows_sys::Win32::NetworkManagement::IpHelper;
 use windows_sys::Win32::Networking::WinSock;
+use windows_sys::Win32::System::Com::StringFromGUID2;
 
 /// Represent an operational status of the adapter
 /// See IP_ADAPTER_ADDRESSES docs for more details
@@ -57,100 +58,23 @@ pub enum IfType {
 /// Represent an adapter.
 #[derive(Debug)]
 pub struct Adapter {
-    adapter_name: String,
-    ipv4_if_index: u32,
-    ip_addresses: Vec<IpAddr>,
-    prefixes: Vec<(IpAddr, u32)>,
-    gateways: Vec<IpAddr>,
-    dns_servers: Vec<IpAddr>,
-    description: String,
-    friendly_name: String,
-    physical_address: Option<Vec<u8>>,
-    receive_link_speed: u64,
-    transmit_link_speed: u64,
-    oper_status: OperStatus,
-    if_type: IfType,
-    ipv6_if_index: u32,
-    ipv4_metric: u32,
-    ipv6_metric: u32,
-}
-
-impl Adapter {
-    /// Get the adapter's name
-    pub fn adapter_name(&self) -> &str {
-        &self.adapter_name
-    }
-    /// Get the ipv4 interface index
-    pub fn ipv4_if_index(&self) -> u32 {
-        self.ipv4_if_index
-    }
-    /// Get the adapter's ip addresses (unicast ip addresses)
-    pub fn ip_addresses(&self) -> &[IpAddr] {
-        &self.ip_addresses
-    }
-    /// Get the adapter's prefixes. Returns a list of tuples (IpAddr, u32),
-    /// where first element is a subnet address, e.g. 192.168.1.0
-    /// and second element is prefix length, e.g. 24
-    pub fn prefixes(&self) -> &[(IpAddr, u32)] {
-        &self.prefixes
-    }
-    /// Get the adapter's gateways
-    pub fn gateways(&self) -> &[IpAddr] {
-        &self.gateways
-    }
-    /// Get the adapter's dns servers (the preferred dns server is first)
-    pub fn dns_servers(&self) -> &[IpAddr] {
-        &self.dns_servers
-    }
-    /// Get the adapter's description
-    pub fn description(&self) -> &str {
-        &self.description
-    }
-    /// Get the adapter's friendly name
-    pub fn friendly_name(&self) -> &str {
-        &self.friendly_name
-    }
-    /// Get the adapter's physical (MAC) address
-    pub fn physical_address(&self) -> Option<&[u8]> {
-        self.physical_address.as_ref().map(std::vec::Vec::as_slice)
-    }
-
-    /// Get the adapter Recieve Link Speed (bits per second)
-    pub fn receive_link_speed(&self) -> u64 {
-        self.receive_link_speed
-    }
-
-    /// Get the Trasnmit Link Speed (bits per second)
-    pub fn transmit_link_speed(&self) -> u64 {
-        self.transmit_link_speed
-    }
-
-    /// Check if the adapter is up (OperStatus is IfOperStatusUp)
-    pub fn oper_status(&self) -> OperStatus {
-        self.oper_status
-    }
-
-    /// Get the interface type
-    pub fn if_type(&self) -> IfType {
-        self.if_type
-    }
-
-    /// Get the IPv6 interface index.
-    ///
-    /// The return value can be used as an IPv6 scope id for link-local
-    /// addresses.
-    pub fn ipv6_if_index(&self) -> u32 {
-        self.ipv6_if_index
-    }
-
-    /// Returns the metric used to compute route preference for IPv4
-    pub fn ipv4_metric(&self) -> u32 {
-        self.ipv4_metric
-    }
-    /// Returns the metric used to compute route preference for IPv6
-    pub fn ipv6_metric(&self) -> u32 {
-        self.ipv6_metric
-    }
+    pub adapter_name: String,
+    pub guid: String,
+    pub ipv4_if_index: u32,
+    pub ip_addresses: Vec<IpAddr>,
+    pub prefixes: Vec<(IpAddr, u32)>,
+    pub gateways: Vec<IpAddr>,
+    pub dns_servers: Vec<IpAddr>,
+    pub description: String,
+    pub friendly_name: String,
+    pub physical_address: Option<Vec<u8>>,
+    pub receive_link_speed: u64,
+    pub transmit_link_speed: u64,
+    pub oper_status: OperStatus,
+    pub if_type: IfType,
+    pub ipv6_if_index: u32,
+    pub ipv4_metric: u32,
+    pub ipv6_metric: u32,
 }
 
 /// Get all the network adapters on this machine.
@@ -198,6 +122,18 @@ unsafe fn get_adapter(
     adapter_addresses_ptr: *const IpHelper::IP_ADAPTER_ADDRESSES_LH,
 ) -> Result<Adapter> {
     let adapter_addresses = adapter_addresses_ptr.read_unaligned();
+    let mut buf = [0; 64];
+    let guid_len = StringFromGUID2(
+        &adapter_addresses.NetworkGuid,
+        buf.as_mut_ptr(),
+        buf.len() as _,
+    );
+    if guid_len == 0 {
+        return Err(Error {
+            kind: ErrorKind::Os(0),
+        });
+    }
+    let guid = WideCString::from_ptr_str(buf[0..(guid_len as _)].as_ptr()).to_string()?; 
     let ipv4_if_index = adapter_addresses.Anonymous1.Anonymous.IfIndex;
     let adapter_name = CStr::from_ptr(adapter_addresses.AdapterName as _)
         .to_str()?
@@ -248,6 +184,7 @@ unsafe fn get_adapter(
     };
     Ok(Adapter {
         adapter_name,
+        guid,
         ipv4_if_index,
         ip_addresses: unicast_addresses,
         prefixes,
@@ -346,7 +283,7 @@ unsafe fn get_prefixes(
 }
 
 #[test]
-fn test_adapters(){
+fn test_adapters() {
     let adapters = get_adapters().unwrap();
     for a in adapters {
         println!("{:?}", a);

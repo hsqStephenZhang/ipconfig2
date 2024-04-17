@@ -3,7 +3,7 @@ use crate::error::*;
 use widestring::WideCString;
 use windows_sys::Win32::NetworkManagement::WindowsFilteringPlatform::{self as fwpm};
 
-pub use filters::{add_filter, get_filters};
+pub use filters::get_filters;
 pub use sub_layer::{add_sub_layer, get_sub_layers};
 
 #[derive(Clone, Debug)]
@@ -145,24 +145,24 @@ mod filters {
         Ok(results)
     }
 
-    pub fn add_filter(filter: &fwpm::FWPM_FILTER0) -> Result<u64> {
-        let engine_handle = get_engine_handle()?;
-        let mut filter_id = 0_u64;
-        let code = unsafe {
-            fwpm::FwpmFilterAdd0(
-                engine_handle,
-                filter,
-                std::ptr::null(),
-                &mut filter_id as *mut _,
-            )
-        };
-        if code != 0 {
-            return Err(Error {
-                kind: ErrorKind::Os(code),
-            });
-        }
-        Ok(filter_id)
-    }
+    // pub fn add_filter(filter: &fwpm::FWPM_FILTER0) -> Result<u64> {
+    //     let engine_handle = get_engine_handle()?;
+    //     let mut filter_id = 0_u64;
+    //     let code = unsafe {
+    //         fwpm::FwpmFilterAdd0(
+    //             engine_handle,
+    //             filter,
+    //             std::ptr::null(),
+    //             &mut filter_id as *mut _,
+    //         )
+    //     };
+    //     if code != 0 {
+    //         return Err(Error {
+    //             kind: ErrorKind::Os(code),
+    //         });
+    //     }
+    //     Ok(filter_id)
+    // }
 }
 
 mod sub_layer {
@@ -294,7 +294,6 @@ mod tests {
     use self::sub_layer::{add_sub_layer, SubLayer};
     use super::*;
     use crate::utils::{generate_guid, guid_to_bytes};
-    use tests::filters::add_filter;
 
     #[test]
     fn test_get_filters() {

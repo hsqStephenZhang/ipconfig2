@@ -3,5 +3,7 @@ pub mod error;
 
 #[cfg(feature = "computer")]
 pub mod computer;
+pub mod dns;
+pub mod utils;
 
-pub use adapter::{get_adapters, Adapter, OperStatus, IfType};
+pub use adapter::{get_adapters, Adapter, IfType, OperStatus};

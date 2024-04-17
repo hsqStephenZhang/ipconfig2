@@ -6,6 +6,7 @@ use std::ffi::CStr;
 use std::net::IpAddr;
 
 use crate::error::*;
+use crate::utils::guid_to_bytes;
 use socket2;
 use widestring::WideCString;
 use windows_sys::Win32::Foundation::ERROR_BUFFER_OVERFLOW;
@@ -13,7 +14,7 @@ use windows_sys::Win32::Foundation::ERROR_SUCCESS;
 
 use windows_sys::Win32::NetworkManagement::IpHelper;
 use windows_sys::Win32::Networking::WinSock;
-use windows_sys::Win32::System::Com::StringFromGUID2;
+// use windows_sys::Win32::System::Com::StringFromGUID2;
 
 /// Represent an operational status of the adapter
 /// See IP_ADAPTER_ADDRESSES docs for more details
@@ -59,7 +60,8 @@ pub enum IfType {
 #[derive(Debug)]
 pub struct Adapter {
     pub adapter_name: String,
-    pub guid: String,
+    pub network_guid: [u8; 16],
+    pub luid: u64,
     pub ipv4_if_index: u32,
     pub ip_addresses: Vec<IpAddr>,
     pub prefixes: Vec<(IpAddr, u32)>,
@@ -90,7 +92,7 @@ pub fn get_adapters() -> Result<Vec<Adapter>> {
             adapters_addresses_buffer.resize(buf_len as usize, 0);
 
             result = IpHelper::GetAdaptersAddresses(
-                IpHelper::AF_UNSPEC as u32,
+                IpHelper::AF_UNSPEC,
                 0x0080 | 0x0010, //GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_PREFIX,
                 std::ptr::null_mut(),
                 adapters_addresses_buffer.as_mut_ptr() as *mut _,
@@ -122,18 +124,8 @@ unsafe fn get_adapter(
     adapter_addresses_ptr: *const IpHelper::IP_ADAPTER_ADDRESSES_LH,
 ) -> Result<Adapter> {
     let adapter_addresses = adapter_addresses_ptr.read_unaligned();
-    let mut buf = [0; 64];
-    let guid_len = StringFromGUID2(
-        &adapter_addresses.NetworkGuid,
-        buf.as_mut_ptr(),
-        buf.len() as _,
-    );
-    if guid_len == 0 {
-        return Err(Error {
-            kind: ErrorKind::Os(0),
-        });
-    }
-    let guid = WideCString::from_ptr_str(buf[0..(guid_len as _)].as_ptr()).to_string()?; 
+    let guid = guid_to_bytes(&adapter_addresses.NetworkGuid);
+    let luid = adapter_addresses.Luid.Value;
     let ipv4_if_index = adapter_addresses.Anonymous1.Anonymous.IfIndex;
     let adapter_name = CStr::from_ptr(adapter_addresses.AdapterName as _)
         .to_str()?
@@ -184,7 +176,8 @@ unsafe fn get_adapter(
     };
     Ok(Adapter {
         adapter_name,
-        guid,
+        network_guid: guid,
+        luid,
         ipv4_if_index,
         ip_addresses: unicast_addresses,
         prefixes,
@@ -283,9 +276,34 @@ unsafe fn get_prefixes(
 }
 
 #[test]
-fn test_adapters() {
+fn test_convert() {
     let adapters = get_adapters().unwrap();
     for a in adapters {
-        println!("{:?}", a);
+        let mut guid0 = windows_sys::core::GUID {
+            data1: 0,
+            data2: 0,
+            data3: 0,
+            data4: [0; 8],
+        };
+        let luid0 = IpHelper::NET_LUID_LH { Value: a.luid };
+        let code = unsafe {
+            IpHelper::ConvertInterfaceLuidToGuid(&luid0 as *const _, &mut guid0 as *mut _)
+        };
+        assert!(code == 0);
+
+        let mut luid1 = IpHelper::NET_LUID_LH { Value: 0 };
+        let code = unsafe {
+            IpHelper::ConvertInterfaceGuidToLuid(&guid0 as *const _, &mut luid1 as *mut _)
+        };
+        assert!(code == 0);
+        assert_eq!(unsafe { luid1.Value }, a.luid);
+    }
+}
+
+#[test]
+fn test_get_dns() {
+    let adapters = get_adapters().unwrap();
+    for a in adapters {
+        println!("{}: {:?}", a.friendly_name, a.dns_servers);
     }
 }

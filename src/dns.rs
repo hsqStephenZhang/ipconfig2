@@ -4,9 +4,10 @@ use windows_sys::Win32::{Foundation::GetLastError, NetworkManagement::IpHelper};
 
 // U can get the dns servers in `Adapter`'s field, here is the detailed version
 pub fn get_dns_setting(luid: u64) -> Result<IpHelper::DNS_INTERFACE_SETTINGS> {
-    let dns_setting = [0u8; std::mem::size_of::<IpHelper::DNS_INTERFACE_SETTINGS>()];
-    let mut dns_setting: IpHelper::DNS_INTERFACE_SETTINGS =
-        unsafe { std::mem::transmute(dns_setting) };
+    let mut dns_setting: IpHelper::DNS_INTERFACE_SETTINGS;
+    unsafe {
+        dns_setting = core::mem::zeroed();
+    }
     dns_setting.Version = IpHelper::DNS_INTERFACE_SETTINGS_VERSION3;
     let guid = luid_to_guid(luid);
     let code = unsafe { IpHelper::GetInterfaceDnsSettings(guid, &mut dns_setting as *mut _) };
@@ -24,10 +25,10 @@ pub fn set_dns_setting_v4(
     servers: &[&str],
     search_list: &[&str],
 ) -> Result<()> {
-    let dns_setting = [0u8; std::mem::size_of::<IpHelper::DNS_INTERFACE_SETTINGS>()];
-    // safety: dns_setting is valid
-    let mut dns_setting: IpHelper::DNS_INTERFACE_SETTINGS =
-        unsafe { std::mem::transmute(dns_setting) };
+    let mut dns_setting: IpHelper::DNS_INTERFACE_SETTINGS;
+    unsafe {
+        dns_setting = core::mem::zeroed();
+    }
     dns_setting.Version = IpHelper::DNS_INTERFACE_SETTINGS_VERSION3;
     let servers = WideCString::from_str(servers.join(",")).unwrap();
     let search_list = WideCString::from_str(search_list.join(",")).unwrap();
@@ -40,11 +41,8 @@ pub fn set_dns_setting_v4(
     unsafe { set_dns_setting(luid, &dns_setting) }
 }
 
-/// safety: the dns_setting must be valid
-unsafe fn set_dns_setting(
-    luid: u64,
-    dns_setting: &IpHelper::DNS_INTERFACE_SETTINGS,
-) -> Result<()> {
+/// #safety: the dns_setting must be valid
+unsafe fn set_dns_setting(luid: u64, dns_setting: &IpHelper::DNS_INTERFACE_SETTINGS) -> Result<()> {
     let guid = luid_to_guid(luid);
     let code = IpHelper::SetInterfaceDnsSettings(guid, dns_setting);
     if code != 0 {

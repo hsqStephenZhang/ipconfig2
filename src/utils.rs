@@ -48,3 +48,16 @@ pub fn luid_to_guid(luid: u64) -> windows_sys::core::GUID {
     }
     guid
 }
+
+pub fn generate_guid() -> windows_sys::core::GUID {
+    let mut guid = windows_sys::core::GUID {
+        data1: 0,
+        data2: 0,
+        data3: 0,
+        data4: [0; 8],
+    };
+    unsafe {
+        windows_sys::Win32::System::Com::CoCreateGuid(&mut guid as *mut _);
+    }
+    guid
+}

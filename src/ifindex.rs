@@ -106,7 +106,7 @@ pub fn set_ip_unicast_if<S: AsRawSocket>(socket: &S, is_ipv6: bool, iface: &str)
             // Interface index is in host byte order for IPPROTO_IPV6.
             setsockopt(
                 handle,
-                IPPROTO_IPV6 as i32,
+                IPPROTO_IPV6,
                 IPV6_UNICAST_IF as i32,
                 &if_index as *const _ as PCSTR,
                 mem::size_of_val(&if_index) as i32,
@@ -117,7 +117,9 @@ pub fn set_ip_unicast_if<S: AsRawSocket>(socket: &S, is_ipv6: bool, iface: &str)
             let err = io::Error::from_raw_os_error(WSAGetLastError());
             tracing::error!(
                 "set IP_UNICAST_IF / IPV6_UNICAST_IF interface: {}, index: {}, error: {}",
-                iface, if_index, err
+                iface,
+                if_index,
+                err
             );
             return Err(err);
         }

@@ -3,6 +3,6 @@ fn main() {
 
     for adapter in adapters {
         let uuid = uuid::Uuid::from_bytes(adapter.network_guid);
-        println!("{:?}: {}", adapter.ip_addresses, uuid.to_string());
+        println!("{:?}: {}", adapter.ip_addresses, uuid);
     }
 }
